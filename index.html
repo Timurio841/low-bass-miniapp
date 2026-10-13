@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Low Bass Processor</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: #141414;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    padding: 20px;
+    min-height: 100vh;
+}
+h1 {
+    font-size: 22px;
+    margin-bottom: 8px;
+    color: #fff;
+}
+.subtitle {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 24px;
+}
+.section {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+.section h2 {
+    font-size: 14px;
+    color: #aaa;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+}
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #2a2a2a;
+}
+.checkbox-row:last-child { border-bottom: none; }
+.checkbox-row input {
+    margin-right: 12px;
+    width: 20px;
+    height: 20px;
+    accent-color: #3a8eef;
+}
+.file-upload {
+    background: #2a2a2a;
+    border: 2px dashed #3a8eef;
+    border-radius: 12px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 16px;
+    cursor: pointer;
+}
+.file-upload.active {
+    background: #2a3a5a;
+    border-color: #5aaeff;
+}
+.file-upload input { display: none; }
+.file-upload label {
+    cursor: pointer;
+    color: #3a8eef;
+    font-size: 15px;
+}
+.file-name {
+    margin-top: 8px;
+    font-size: 13px;
+    color: #7ad07a;
+}
+.btn {
+    width: 100%;
+    background: #3a8eef;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn:active { background: #2a6cba; }
+.btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+}
+.status {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    text-align: center;
+    display: none;
+}
+.status.show { display: block; }
+.status.info { background: #1a3a5a; color: #8ac4ff; }
+.status.success { background: #1a4a2a; color: #7ad07a; }
+.status.error { background: #4a1a1a; color: #ff8a8a; }
+</style>
+</head>
+<body>
+
+<h1>🎛 Low Bass Processor</h1>
+<p class="subtitle">Замена баса на чистые синусоиды</p>
+
+<div class="file-upload" id="fileBox">
+    <input type="file" id="fileInput" accept="audio/*">
+    <label for="fileInput">📁 Выбрать аудиофайл</label>
+    <div class="file-name" id="fileName"></div>
+</div>
+
+<div class="section">
+    <h2>Выбери синусоиды (1–4)</h2>
+    <div id="sineList">
+        <div class="checkbox-row">
+            <input type="checkbox" value="20" id="s20"><label for="s20">sin20hz</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" value="29" id="s29"><label for="s29">sin29hz</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" value="33" id="s33"><label for="s33">sin33hz</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" value="41" id="s41"><label for="s41">sin41hz</label>
+        </div>
+        <div class="checkbox-row">
+            <input type="checkbox" value="55" id="s55"><label for="s55">sin55hz</label>
+        </div>
+    </div>
+</div>
+
+<button class="btn" id="sendBtn" disabled>▶️ Отправить на обработку</button>
+
+<div class="status" id="status"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready();
+tg.expand();
+tg.setHeaderColor('#141414');
+tg.setBackgroundColor('#141414');
+
+const fileInput = document.getElementById('fileInput');
+const fileName = document.getElementById('fileName');
+const fileBox = document.getElementById('fileBox');
+const sendBtn = document.getElementById('sendBtn');
+const status = document.getElementById('status');
+
+let selectedFile = null;
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        selectedFile = e.target.files[0];
+        fileName.textContent = '✓ ' + selectedFile.name;
+        fileBox.classList.add('active');
+        updateSendBtn();
+    }
+});
+
+document.querySelectorAll('#sineList input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', updateSendBtn);
+});
+
+function getSelectedSines() {
+    return Array.from(document.querySelectorAll('#sineList input:checked'))
+        .map(cb => cb.value);
+}
+
+function updateSendBtn() {
+    const sines = getSelectedSines();
+    sendBtn.disabled = !selectedFile || sines.length < 1 || sines.length > 4;
+}
+
+function showStatus(text, type) {
+    status.textContent = text;
+    status.className = 'status show ' + type;
+}
+
+sendBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    const sines = getSelectedSines();
+    
+    showStatus('📤 Отправляю файл...', 'info');
+    sendBtn.disabled = true;
+    
+    // Отправляем данные обратно в бота
+    // ВАЖНО: пока мы просто отправляем текстовые данные,
+    // чтобы показать, что связка работает.
+    const data = {
+        action: 'process',
+        sines: sines,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+    };
+    
+    tg.sendData(JSON.stringify(data));
+    
+    setTimeout(() => {
+        showStatus('✅ Данные отправлены боту!', 'success');
+        tg.close();
+    }, 500);
+});
+</script>
+
+</body>
+</html>
